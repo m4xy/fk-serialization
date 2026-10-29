@@ -42,10 +42,16 @@ module JsonText : Format {
 
   // ---- Reading ----
 
-  @Fail private charAt(s: String, at: Int): Char = if (at < s.length) s.get(at) else fail("at ${at + 1}: the JSON ends too soon")
+  @Fail private charAt(s: String, at: Int): Char = when (s.getOrNone(at)) {
+    Some(c) -> c
+    None -> fail("at ${at + 1}: the JSON ends too soon")
+  }
+
+  // Whether s has a character at at that test holds of.
+  private holds(s: String, at: Int, test: (Char) -> Boolean): Boolean = s.getOrNone(at).map(test).getOrElse(false)
 
   private spaceAfter(s: String, at: Int): Int =
-    if (at < s.length && " \t\n\r".contains("${s.get(at)}")) spaceAfter(s, at + 1) else at
+    if (holds(s, at) { " \t\n\r".contains("$it") }) spaceAfter(s, at + 1) else at
 
   @Fail private expect(s: String, at: Int, word: String): Int =
     if (s.drop(at).startsWith(word)) at + word.length else fail("at ${at + 1}: expected $word")
@@ -100,14 +106,14 @@ module JsonText : Format {
     afterSign = if (charAt(s, at) == '-') at + 1 else at
     afterWhole = digitsAt(s, afterSign)
     if (afterWhole == afterSign) fail("at ${at + 1}: a number needs a digit")
-    if (s.get(afterSign) == '0' && afterWhole > afterSign + 1) fail("at ${at + 1}: a number can't start with 0")
-    afterFraction = if (afterWhole < s.length && s.get(afterWhole) == '.') {
+    if (s.getOrNone(afterSign) == Some('0') && afterWhole > afterSign + 1) fail("at ${at + 1}: a number can't start with 0")
+    afterFraction = if (s.getOrNone(afterWhole) == Some('.')) {
       end = digitsAt(s, afterWhole + 1)
       if (end == afterWhole + 1) fail("at ${afterWhole + 2}: a number's fraction needs a digit")
       end
     } else afterWhole
-    end = if (afterFraction < s.length && (s.get(afterFraction) == 'e' || s.get(afterFraction) == 'E')) {
-      afterExponentSign = if (afterFraction + 1 < s.length && (s.get(afterFraction + 1) == '+' || s.get(afterFraction + 1) == '-')) afterFraction + 2 else afterFraction + 1
+    end = if (holds(s, afterFraction) { it == 'e' || it == 'E' }) {
+      afterExponentSign = if (holds(s, afterFraction + 1) { it == '+' || it == '-' }) afterFraction + 2 else afterFraction + 1
       exponentEnd = digitsAt(s, afterExponentSign)
       if (exponentEnd == afterExponentSign) fail("at ${afterExponentSign + 1}: a number's exponent needs a digit")
       exponentEnd
@@ -115,7 +121,7 @@ module JsonText : Format {
     (JsonNumber(s.substring(at, end)), end)
   }
 
-  private digitsAt(s: String, at: Int): Int = if (at < s.length && s.get(at).isDigit()) digitsAt(s, at + 1) else at
+  private digitsAt(s: String, at: Int): Int = if (holds(s, at) { it.isDigit() }) digitsAt(s, at + 1) else at
 
   // A string's text, after its opening quote, unescaped, and where it ends, after its closing one.
   @Fail private stringAt(s: String, at: Int, kept: String): (String, Int) = {
@@ -132,7 +138,7 @@ module JsonText : Format {
 
   // Where the text with nothing to unescape ends: at a quote, a backslash or a control character.
   private plainEnd(s: String, at: Int): Int =
-    if (at < s.length && s.get(at) != '"' && s.get(at) != '\\' && s.get(at).code >= 32) plainEnd(s, at + 1) else at
+    if (holds(s, at) { it != '"' && it != '\\' && it.code >= 32 }) plainEnd(s, at + 1) else at
 
   @Fail private escapeAt(s: String, at: Int): (String, Int) = when (charAt(s, at)) {
     '"' -> ("\"", at + 1)
