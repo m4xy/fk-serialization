@@ -54,11 +54,10 @@ module Json {
     }
   }
 
-  // A number as JSON writes it: never 1., as OCaml would, but 1.0; and what isn't finite, null.
+  // A number as JSON writes it, as fckt shows it, 1.0 or 1.0E-6; and what isn't finite, null.
   private number(x: Float): JsonValue = {
     text = "$x"
-    if (text.contains("inf") || text.contains("nan")) JsonNull
-    else JsonNumber(if (text.endsWith(".")) "${text}0" else text)
+    if (text == "NaN" || text.endsWith("Infinity")) JsonNull else JsonNumber(text)
   }
 
   // With value written where it goes: as the open object's next field, the open array's next item,
