@@ -1,0 +1,9 @@
+// How a T is written in any format, and read back: what's written as serialize says it is read
+// back by deserialize. A module that follows it is a value of it, a Serializer<T>, which a format
+// is given: Json.encode(UserSerializer, user). fk-serialization's processor writes one for each
+// type marked @Serializable.
+spec Serializer {
+  type T
+  @Encoder serialize(value: T): Unit
+  @Decoder deserialize(): T
+}

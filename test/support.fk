@@ -1,0 +1,96 @@
+import uk.m4xy.serialization.*
+import uk.m4xy.serialization.Encoding.*
+import uk.m4xy.serialization.Decoding.*
+import fckt.collections.Maps.*
+import fckt.effects.Fail
+
+// What the tests write and read, with serializers as fk-serialization's processor writes them.
+type Point(x: Int, y: Int = 0)
+type Shape { Circle(centre: Point, radius: Float), Dot }
+type Level { Low, High }
+type Drawing(shapes: List<Shape>, title: Option<String>, levels: Map<String, Level>, mark: Char)
+
+module PointSerializer : Serializer {
+  type T = Point
+  @Encoder serialize(value: Point): Unit = {
+    beginRecord("Point")
+    encodeField("x")
+    IntSerializer.serialize(value.x)
+    encodeField("y")
+    IntSerializer.serialize(value.y)
+    endRecord()
+  }
+  @Decoder deserialize(): Point = {
+    enterRecord("Point")
+    x = required("Point", "x") { IntSerializer.deserialize() }
+    made = Point(x = x)
+    withY = if (decodeField("y")) made.copy(y = IntSerializer.deserialize()) else made
+    leaveRecord()
+    withY
+  }
+}
+
+module ShapeSerializer : Serializer {
+  type T = Shape
+  @Encoder serialize(value: Shape): Unit = when (value) {
+    Circle(centre, radius) -> {
+      beginCase("Shape", "Circle")
+      encodeField("centre")
+      PointSerializer.serialize(centre)
+      encodeField("radius")
+      FloatSerializer.serialize(radius)
+      endCase()
+    }
+    Dot -> {
+      beginCase("Shape", "Dot")
+      endCase()
+    }
+  }
+  @Decoder deserialize(): Shape = {
+    case = enterCase("Shape")
+    made = when (case) {
+      "Circle" -> Circle(required("Shape.Circle", "centre") { PointSerializer.deserialize() }, required("Shape.Circle", "radius") { FloatSerializer.deserialize() })
+      "Dot" -> Dot
+      else -> fail("$case isn't a case of Shape")
+    }
+    leaveCase()
+    made
+  }
+}
+
+module LevelSerializer : Serializer {
+  type T = Level
+  @Encoder serialize(value: Level): Unit = encodeEnum("Level", value.name)
+  @Decoder deserialize(): Level = when (decodeEnum("Level")) {
+    "Low" -> Low
+    "High" -> High
+    other -> fail("$other isn't a case of Level")
+  }
+}
+
+module DrawingSerializer : Serializer {
+  type T = Drawing
+  @Encoder serialize(value: Drawing): Unit = {
+    beginRecord("Drawing")
+    encodeField("shapes")
+    encodeList(value.shapes) { ShapeSerializer.serialize(it) }
+    encodeField("title")
+    encodeOption(value.title) { StringSerializer.serialize(it) }
+    encodeField("levels")
+    encodeMap(value.levels) { LevelSerializer.serialize(it) }
+    encodeField("mark")
+    CharSerializer.serialize(value.mark)
+    endRecord()
+  }
+  @Decoder deserialize(): Drawing = {
+    enterRecord("Drawing")
+    made = Drawing(
+      shapes = required("Drawing", "shapes") { decodeList { ShapeSerializer.deserialize() } },
+      title = required("Drawing", "title") { decodeOption { StringSerializer.deserialize() } },
+      levels = required("Drawing", "levels") { decodeMap { LevelSerializer.deserialize() } },
+      mark = required("Drawing", "mark") { CharSerializer.deserialize() },
+    )
+    leaveRecord()
+    made
+  }
+}

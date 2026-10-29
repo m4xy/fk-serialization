@@ -1,0 +1,31 @@
+import fckt.effects.Failure.attempt
+import fckt.symbols.*
+import fckt.symbols.Declarations.*
+import fckt.symbols.processing.*
+
+// fk-serialization's processor: a serializer for each type marked @Serializable, as
+// SerializerWriting writes it; or, for each it can't write, why, where the type is. A project lists
+// it, for kiln to run before compiling it:
+//
+//   Processor("uk.m4xy.serialization.processor.SerializerProcessor", [library("uk.m4xy:fk-serialization-processor:0.1.0")])
+module SerializerProcessor : Processor {
+  process(symbols: Symbols): Result<List<GeneratedFile>, List<Problem>> = {
+    marked = symbols.annotatedWith(SerializerWriting.serializable)
+    serializable = marked.map { it.name }
+    others = symbols.types.map { it.name }.filter { !serializable.contains(it) }
+    written = marked.map { d -> (d, attempt { SerializerWriting.file(d, serializable, others) }) }
+    problems = written.flatMap { d, result ->
+      when (result) {
+        Ok(_) -> []
+        Error(reason) -> [Problem(reason, Some(d.location))]
+      }
+    }
+    if (problems.isEmpty()) Ok(written.flatMap { _, result ->
+      when (result) {
+        Ok(file) -> [file]
+        Error(_) -> []
+      }
+    })
+    else Error(problems)
+  }
+}

@@ -1,0 +1,24 @@
+// Writing a value in a format, as a serializer says it, a piece at a time: a format's handler
+// writes each piece as that format has it. A value is a constant; none, for an Option; a record,
+// begun, then each field's name and value, then ended; a list, begun, its items, then ended; a map
+// from text, begun, each key and value, then ended; a case, begun with its type and its name, its
+// fields as a record's, then ended; or one of an enumeration's cases, by name.
+effect Encoder {
+  encodeInt(value: Int): Unit
+  encodeFloat(value: Float): Unit
+  encodeString(value: String): Unit
+  encodeBoolean(value: Boolean): Unit
+  encodeChar(value: Char): Unit
+  encodeNone(): Unit
+  beginRecord(typeName: String): Unit
+  encodeField(name: String): Unit
+  endRecord(): Unit
+  beginList(size: Int): Unit
+  endList(): Unit
+  beginMap(size: Int): Unit
+  encodeKey(key: String): Unit
+  endMap(): Unit
+  beginCase(typeName: String, case: String): Unit
+  endCase(): Unit
+  encodeEnum(typeName: String, case: String): Unit
+}

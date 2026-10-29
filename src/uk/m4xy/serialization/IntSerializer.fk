@@ -1,0 +1,6 @@
+// A Int, as the format writes one.
+module IntSerializer : Serializer {
+  type T = Int
+  @Encoder serialize(value: Int): Unit = encodeInt(value)
+  @Decoder deserialize(): Int = decodeInt()
+}

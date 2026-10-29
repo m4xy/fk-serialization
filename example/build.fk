@@ -1,0 +1,14 @@
+// What fk-serialization does for a project, as one uses it: its types marked @Serializable, whose
+// serializers the processor writes, written and read as JSON by its tests. It's never published.
+import uk.m4xy.kiln.fckt.*
+import uk.m4xy.fktests.kiln.*
+
+project = Project(name = "example", group = "shop", dependencies = [projectAt("..")])
+
+module Serialized : FcktConfiguration {
+  layout(): FcktLayout = FcktLayout(processors = [
+    Processor("uk.m4xy.serialization.processor.SerializerProcessor", [projectAt("../processor")]),
+  ])
+}
+
+plugins = [Fckt(Serialized), FkTests(StandardTests, Serialized)]

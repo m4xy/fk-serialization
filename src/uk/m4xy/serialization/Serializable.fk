@@ -1,0 +1,3 @@
+// Marks a type to have a serializer written for it, NameSerializer beside it, by fk-serialization's
+// processor: a record, whose fields are each serializable, or a type with cases, whose cases' are.
+annotation type Serializable

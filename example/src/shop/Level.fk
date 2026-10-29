@@ -1,0 +1,3 @@
+import uk.m4xy.serialization.*
+
+@Serializable type Level { Low, @SerialName("high") High }

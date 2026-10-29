@@ -1,0 +1,221 @@
+import fckt.effects.Fail
+import fckt.effects.Failure.attempt
+import uk.m4xy.serialization.*
+
+// Serializers' values as JSON: a record is an object of its fields, by their serial names; a list
+// an array; a map from text an object; an Option's None null, and Some its value; a case an object
+// of its fields with its name as "type"; an enumeration's case its name, a string; a Char a string
+// of it; and a Float that isn't finite, which JSON has no number for, null.
+module Json {
+  // The value, as JSON text.
+  encode<A>(serializer: Serializer<A>, value: A): String = JsonText.of(toJson(serializer, value))
+
+  // The value JSON text is, or why it isn't one.
+  decode<A>(serializer: Serializer<A>, text: String): Result<A, String> = when (JsonText.read(text)) {
+    Ok(json) -> fromJson(serializer, json)
+    Error(reason) -> Error(reason)
+  }
+
+  // ---- Encoding ----
+
+  // What's being written: the value so far, below what's open; an object, with the name of the
+  // field whose value is next; an array.
+  private type Writing {
+    Written(value: Option<JsonValue>),
+    InObject(fields: List<JsonField>, next: String),
+    InArray(items: List<JsonValue>),
+  }
+
+  // The value, as JSON.
+  toJson<A>(serializer: Serializer<A>, value: A): JsonValue = {
+    var open = [Written(None)]
+    Encoder(
+      encodeInt = n -> { open = put(open, JsonNumber("$n")) },
+      encodeFloat = x -> { open = put(open, number(x)) },
+      encodeString = s -> { open = put(open, JsonString(s)) },
+      encodeBoolean = b -> { open = put(open, JsonBoolean(b)) },
+      encodeChar = c -> { open = put(open, JsonString("$c")) },
+      encodeNone = () -> { open = put(open, JsonNull) },
+      beginRecord = _ -> { open = [InObject([], "")] + open },
+      encodeField = name -> { open = named(open, name) },
+      endRecord = () -> { open = closed(open) },
+      beginList = _ -> { open = [InArray([])] + open },
+      endList = () -> { open = closed(open) },
+      beginMap = _ -> { open = [InObject([], "")] + open },
+      encodeKey = key -> { open = named(open, key) },
+      endMap = () -> { open = closed(open) },
+      beginCase = (_, case) -> { open = [InObject([JsonField("type", JsonString(case))], "")] + open },
+      endCase = () -> { open = closed(open) },
+      encodeEnum = (_, case) -> { open = put(open, JsonString(case)) },
+    ) { serializer.serialize(value) }
+    when (open) {
+      [Written(Some(written))] -> written
+      else -> JsonNull
+    }
+  }
+
+  // A number as JSON writes it: never 1., as OCaml would, but 1.0; and what isn't finite, null.
+  private number(x: Float): JsonValue = {
+    text = "$x"
+    if (text.contains("inf") || text.contains("nan")) JsonNull
+    else JsonNumber(if (text.endsWith(".")) "${text}0" else text)
+  }
+
+  // With value written where it goes: as the open object's next field, the open array's next item,
+  // or the whole value.
+  private put(open: List<Writing>, value: JsonValue): List<Writing> = when (open) {
+    [InObject(fields, next), *rest] -> [InObject(fields + [JsonField(next, value)], "")] + rest
+    [InArray(items), *rest] -> [InArray(items + [value])] + rest
+    [Written(_), *rest] -> [Written(Some(value))] + rest
+    [] -> [Written(Some(value))]
+  }
+
+  // With the open object's next field named.
+  private named(open: List<Writing>, name: String): List<Writing> = when (open) {
+    [InObject(fields, _), *rest] -> [InObject(fields, name)] + rest
+    else -> open
+  }
+
+  // With what's open closed, and written where it goes.
+  private closed(open: List<Writing>): List<Writing> = when (open) {
+    [InObject(fields, _), *rest] -> put(rest, JsonObject(fields))
+    [InArray(items), *rest] -> put(rest, JsonArray(items))
+    else -> open
+  }
+
+  // ---- Decoding ----
+
+  // What's being read: a value, next; the items of an array left; or the fields of an object
+  // read as a map, left.
+  private type Reading {
+    At(value: JsonValue),
+    Items(left: List<JsonValue>),
+    Entries(left: List<JsonField>),
+  }
+
+  // The value json is, or why it isn't one.
+  fromJson<A>(serializer: Serializer<A>, json: JsonValue): Result<A, String> = attempt {
+    var reading = [At(json)]
+    // The value next, which is then read.
+    take = () -> when (reading) {
+      [At(value), *rest] -> {
+        reading = rest
+        value
+      }
+      else -> fail("there's no value here to read")
+    }
+    // The value next, which stays to be read.
+    next = () -> when (reading) {
+      [At(value), *_] -> value
+      else -> fail("there's no value here to read")
+    }
+    Decoder(
+      decodeInt = () -> when (take()) {
+        JsonNumber(text) -> when (text.toIntOrNone()) {
+          Some(n) -> n
+          None -> fail("expected a whole number, not $text")
+        }
+        other -> fail("expected a whole number, not ${described(other)}")
+      },
+      decodeFloat = () -> when (take()) {
+        JsonNumber(text) -> text.toFloat()
+        other -> fail("expected a number, not ${described(other)}")
+      },
+      decodeString = () -> when (take()) {
+        JsonString(s) -> s
+        other -> fail("expected a string, not ${described(other)}")
+      },
+      decodeBoolean = () -> when (take()) {
+        JsonBoolean(b) -> b
+        other -> fail("expected true or false, not ${described(other)}")
+      },
+      decodeChar = () -> when (take()) {
+        JsonString(s) -> when (s.toList()) {
+          [c] -> c
+          else -> fail("expected one character, not ${JsonText.quoted(s)}")
+        }
+        other -> fail("expected a character, not ${described(other)}")
+      },
+      decodeNone = () -> when (next()) {
+        JsonNull -> {
+          take()
+          true
+        }
+        else -> false
+      },
+      enterRecord = typeName -> when (next()) {
+        JsonObject(_) -> Unit
+        other -> fail("expected $typeName, an object, not ${described(other)}")
+      },
+      decodeField = name -> when (next()) {
+        JsonObject(fields) -> when (fields.find { it.name == name }) {
+          Some(field) -> {
+            reading = [At(field.value)] + reading
+            true
+          }
+          None -> false
+        }
+        other -> fail("expected an object with $name, not ${described(other)}")
+      },
+      leaveRecord = () -> {
+        take()
+        Unit
+      },
+      enterList = () -> when (take()) {
+        JsonArray(items) -> { reading = [Items(items)] + reading }
+        other -> fail("expected an array, not ${described(other)}")
+      },
+      hasItem = () -> when (reading) {
+        [Items([item, *left]), *rest] -> {
+          reading = [At(item), Items(left)] + rest
+          true
+        }
+        else -> false
+      },
+      leaveList = () -> when (reading) {
+        [Items(_), *rest] -> { reading = rest }
+        else -> Unit
+      },
+      enterMap = () -> when (take()) {
+        JsonObject(fields) -> { reading = [Entries(fields)] + reading }
+        other -> fail("expected an object, not ${described(other)}")
+      },
+      decodeKey = () -> when (reading) {
+        [Entries([field, *left]), *rest] -> {
+          reading = [At(field.value), Entries(left)] + rest
+          Some(field.name)
+        }
+        else -> None
+      },
+      leaveMap = () -> when (reading) {
+        [Entries(_), *rest] -> { reading = rest }
+        else -> Unit
+      },
+      enterCase = typeName -> when (next()) {
+        JsonObject(fields) -> when (fields.find { it.name == "type" }.map { it.value }) {
+          Some(JsonString(case)) -> case
+          else -> fail("expected $typeName, an object whose type says its case")
+        }
+        other -> fail("expected $typeName, an object, not ${described(other)}")
+      },
+      leaveCase = () -> {
+        take()
+        Unit
+      },
+      decodeEnum = typeName -> when (take()) {
+        JsonString(case) -> case
+        other -> fail("expected one of $typeName's cases, a string, not ${described(other)}")
+      },
+    ) { serializer.deserialize() }
+  }
+
+  // What a value is, as an error says it.
+  private described(value: JsonValue): String = when (value) {
+    JsonNull -> "null"
+    JsonBoolean(b) -> if (b) "true" else "false"
+    JsonNumber(text) -> text
+    JsonString(s) -> JsonText.quoted(s)
+    JsonArray(_) -> "an array"
+    JsonObject(_) -> "an object"
+  }
+}

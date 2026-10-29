@@ -1,0 +1,2 @@
+// The example is a build of its own, as it is a project using fk-serialization would be.
+settings = Settings(uses = [library("uk.m4xy:fk-tests-kiln:0.1.0")])

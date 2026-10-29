@@ -1,0 +1,2 @@
+// A field of a JSON object: its name, and its value.
+type JsonField(name: String, value: JsonValue)

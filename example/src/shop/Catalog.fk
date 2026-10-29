@@ -1,0 +1,5 @@
+import uk.m4xy.serialization.*
+
+module Catalog {
+  @Serializable type Item(name: String, price: Int)
+}

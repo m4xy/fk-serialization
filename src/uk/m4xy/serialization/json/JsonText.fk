@@ -1,0 +1,167 @@
+import fckt.text.Format
+import fckt.effects.Fail
+import fckt.effects.Failure.attempt
+
+// JSON as text: written without spaces, and read as RFC 8259 has it, whatever space is around its
+// values; text outside a string's quotes is never more than one value.
+module JsonText : Format {
+  type T = JsonValue
+
+  of(value: JsonValue): String = when (value) {
+    JsonNull -> "null"
+    JsonBoolean(b) -> if (b) "true" else "false"
+    JsonNumber(text) -> text
+    JsonString(s) -> quoted(s)
+    JsonArray(items) -> "[${items.map { of(it) }.joinToString(",")}]"
+    JsonObject(fields) -> "{${fields.map { "${quoted(it.name)}:${of(it.value)}" }.joinToString(",")}}"
+  }
+
+  read(text: String): Result<JsonValue, String> = attempt {
+    (value, next) = valueAt(text, spaceAfter(text, 0))
+    end = spaceAfter(text, next)
+    if (end < text.length) fail("at ${end + 1}: there's more after the value")
+    value
+  }
+
+  // ---- Writing ----
+
+  // Text in quotes, with what JSON can't have in a string escaped.
+  quoted(s: String): String = "\"${s.toList().map { escaped(it) }.joinToString("")}\""
+
+  private escaped(c: Char): String = when {
+    c == '"' -> "\\\""
+    c == '\\' -> "\\\\"
+    c == '\n' -> "\\n"
+    c == '\r' -> "\\r"
+    c == '\t' -> "\\t"
+    c.code < 32 -> "\\u00${hexDigit(c.code / 16)}${hexDigit(c.code % 16)}"
+    else -> "$c"
+  }
+
+  private hexDigit(n: Int): String = "0123456789abcdef".substring(n, n + 1)
+
+  // ---- Reading ----
+
+  @Fail private charAt(s: String, at: Int): Char = if (at < s.length) s.get(at) else fail("at ${at + 1}: the JSON ends too soon")
+
+  private spaceAfter(s: String, at: Int): Int =
+    if (at < s.length && " \t\n\r".contains("${s.get(at)}")) spaceAfter(s, at + 1) else at
+
+  @Fail private expect(s: String, at: Int, word: String): Int =
+    if (s.drop(at).startsWith(word)) at + word.length else fail("at ${at + 1}: expected $word")
+
+  @Fail private valueAt(s: String, at: Int): (JsonValue, Int) = {
+    c = charAt(s, at)
+    when {
+      c == '{' -> objectAt(s, spaceAfter(s, at + 1), [])
+      c == '[' -> arrayAt(s, spaceAfter(s, at + 1), [])
+      c == '"' -> {
+        (text, next) = stringAt(s, at + 1, "")
+        (JsonString(text), next)
+      }
+      c == 't' -> (JsonBoolean(true), expect(s, at, "true"))
+      c == 'f' -> (JsonBoolean(false), expect(s, at, "false"))
+      c == 'n' -> (JsonNull, expect(s, at, "null"))
+      c == '-' || c.isDigit() -> numberAt(s, at)
+      else -> fail("at ${at + 1}: expected a value, not '$c'")
+    }
+  }
+
+  @Fail private objectAt(s: String, at: Int, kept: List<JsonField>): (JsonValue, Int) =
+    if (kept.isEmpty() && charAt(s, at) == '}') (JsonObject([]), at + 1)
+    else {
+      if (charAt(s, at) != '"') fail("at ${at + 1}: expected a field's name, in quotes")
+      (name, afterName) = stringAt(s, at + 1, "")
+      (value, afterValue) = valueAt(s, spaceAfter(s, expect(s, spaceAfter(s, afterName), ":")))
+      fields = kept + [JsonField(name, value)]
+      next = spaceAfter(s, afterValue)
+      when (charAt(s, next)) {
+        ',' -> objectAt(s, spaceAfter(s, next + 1), fields)
+        '}' -> (JsonObject(fields), next + 1)
+        else -> fail("at ${next + 1}: expected , or } after a field")
+      }
+    }
+
+  @Fail private arrayAt(s: String, at: Int, kept: List<JsonValue>): (JsonValue, Int) =
+    if (kept.isEmpty() && charAt(s, at) == ']') (JsonArray([]), at + 1)
+    else {
+      (value, afterValue) = valueAt(s, at)
+      items = kept + [value]
+      next = spaceAfter(s, afterValue)
+      when (charAt(s, next)) {
+        ',' -> arrayAt(s, spaceAfter(s, next + 1), items)
+        ']' -> (JsonArray(items), next + 1)
+        else -> fail("at ${next + 1}: expected , or ] after an item")
+      }
+    }
+
+  // A number as written, which must be JSON's: -, digits, a fraction, an exponent.
+  @Fail private numberAt(s: String, at: Int): (JsonValue, Int) = {
+    afterSign = if (charAt(s, at) == '-') at + 1 else at
+    afterWhole = digitsAt(s, afterSign)
+    if (afterWhole == afterSign) fail("at ${at + 1}: a number needs a digit")
+    if (s.get(afterSign) == '0' && afterWhole > afterSign + 1) fail("at ${at + 1}: a number can't start with 0")
+    afterFraction = if (afterWhole < s.length && s.get(afterWhole) == '.') {
+      end = digitsAt(s, afterWhole + 1)
+      if (end == afterWhole + 1) fail("at ${afterWhole + 2}: a number's fraction needs a digit")
+      end
+    } else afterWhole
+    end = if (afterFraction < s.length && (s.get(afterFraction) == 'e' || s.get(afterFraction) == 'E')) {
+      afterExponentSign = if (afterFraction + 1 < s.length && (s.get(afterFraction + 1) == '+' || s.get(afterFraction + 1) == '-')) afterFraction + 2 else afterFraction + 1
+      exponentEnd = digitsAt(s, afterExponentSign)
+      if (exponentEnd == afterExponentSign) fail("at ${afterExponentSign + 1}: a number's exponent needs a digit")
+      exponentEnd
+    } else afterFraction
+    (JsonNumber(s.substring(at, end)), end)
+  }
+
+  private digitsAt(s: String, at: Int): Int = if (at < s.length && s.get(at).isDigit()) digitsAt(s, at + 1) else at
+
+  // A string's text, after its opening quote, unescaped, and where it ends, after its closing one.
+  @Fail private stringAt(s: String, at: Int, kept: String): (String, Int) = {
+    end = plainEnd(s, at)
+    text = kept + s.substring(at, end)
+    c = charAt(s, end)
+    if (c == '"') (text, end + 1)
+    else if (c == '\\') {
+      (unescaped, next) = escapeAt(s, end + 1)
+      stringAt(s, next, text + unescaped)
+    }
+    else fail("at ${end + 1}: a string can't have a control character in it")
+  }
+
+  // Where the text with nothing to unescape ends: at a quote, a backslash or a control character.
+  private plainEnd(s: String, at: Int): Int =
+    if (at < s.length && s.get(at) != '"' && s.get(at) != '\\' && s.get(at).code >= 32) plainEnd(s, at + 1) else at
+
+  @Fail private escapeAt(s: String, at: Int): (String, Int) = when (charAt(s, at)) {
+    '"' -> ("\"", at + 1)
+    '\\' -> ("\\", at + 1)
+    '/' -> ("/", at + 1)
+    'b' -> ("${8.toChar()}", at + 1)
+    'f' -> ("${12.toChar()}", at + 1)
+    'n' -> ("\n", at + 1)
+    'r' -> ("\r", at + 1)
+    't' -> ("\t", at + 1)
+    'u' -> {
+      high = hexAt(s, at + 1)
+      // A character past the first 65536 is two escapes, a surrogate pair.
+      if (high >= 55296 && high < 56320 && s.drop(at + 5).startsWith("\\u")) {
+        low = hexAt(s, at + 7)
+        if (low >= 56320 && low < 57344) ("${(65536 + (high - 55296) * 1024 + (low - 56320)).toChar()}", at + 11)
+        else fail("at ${at + 7}: \\u${s.substring(at + 7, at + 11)} doesn't follow a high surrogate")
+      }
+      else if (high >= 55296 && high < 57344) fail("at ${at + 1}: \\u${s.substring(at + 1, at + 5)} is half of a surrogate pair")
+      else ("${high.toChar()}", at + 5)
+    }
+    else -> fail("at ${at + 1}: \\${charAt(s, at)} isn't an escape JSON has")
+  }
+
+  @Fail private hexAt(s: String, at: Int): Int = [0, 1, 2, 3].fold(0) { n, i -> n * 16 + hexValue(charAt(s, at + i), at + i) }
+
+  @Fail private hexValue(c: Char, at: Int): Int = {
+    digits = "0123456789abcdef"
+    found = digits.indexOf("${c.lowercase()}")
+    if (found < 0) fail("at ${at + 1}: '$c' isn't a hex digit") else found
+  }
+}

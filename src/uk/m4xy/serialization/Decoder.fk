@@ -1,0 +1,32 @@
+import fckt.effects.Fail
+
+// Reading a value in a format, as a serializer asks for it: the pieces Encoder writes, in the same
+// order, but for a record's fields, which it asks for by name, in any order, as a format may have
+// them in any. Each value asked for is read once: a constant; whether it's none, which reads it
+// only if it is; a record, entered, the fields it has, then left; a list, entered, each item while
+// it has one, then left; a map, entered, each key while it has one, and its value, then left; a
+// case, entered, which says its name, its fields as a record's, then left; or one of an
+// enumeration's cases, by name. What isn't what's asked for fails.
+@Fail effect Decoder {
+  decodeInt(): Int
+  decodeFloat(): Float
+  decodeString(): String
+  decodeBoolean(): Boolean
+  decodeChar(): Char
+  decodeNone(): Boolean
+  enterRecord(typeName: String): Unit
+  // Whether the record has the field; if it has, its value is what's read next.
+  decodeField(name: String): Boolean
+  leaveRecord(): Unit
+  enterList(): Unit
+  // Whether the list has another item; if it has, it's what's read next.
+  hasItem(): Boolean
+  leaveList(): Unit
+  enterMap(): Unit
+  // The next key, if there's another; its value is what's read next.
+  decodeKey(): Option<String>
+  leaveMap(): Unit
+  enterCase(typeName: String): String
+  leaveCase(): Unit
+  decodeEnum(typeName: String): String
+}

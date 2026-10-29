@@ -1,0 +1,33 @@
+import fckt.collections.Maps.*
+import fckt.effects.Fail
+
+// Reading what holds other values, each item, or value, read as each says; and a record's fields.
+module Decoding {
+  @Decoder decodeList<A>(each: @Decoder () -> A): List<A> = {
+    enterList()
+    items = itemsOf(each, [])
+    leaveList()
+    items
+  }
+
+  @Decoder private itemsOf<A>(each: @Decoder () -> A, kept: List<A>): List<A> =
+    if (hasItem()) itemsOf(each, kept + [each()]) else kept
+
+  @Decoder decodeOption<A>(some: @Decoder () -> A): Option<A> = if (decodeNone()) None else Some(some())
+
+  @Decoder decodeMap<V>(each: @Decoder () -> V): Map<String, V> = {
+    enterMap()
+    entries = entriesOf(each, [])
+    leaveMap()
+    entries.toMap()
+  }
+
+  @Decoder private entriesOf<V>(each: @Decoder () -> V, kept: List<(String, V)>): List<(String, V)> = when (decodeKey()) {
+    Some(key) -> entriesOf(each, kept + [(key, each())])
+    None -> kept
+  }
+
+  // The field of the record of typeName, which must have it, read as read says.
+  @Decoder required<A>(typeName: String, name: String, read: @Decoder () -> A): A =
+    if (decodeField(name)) read() else fail("$typeName needs $name, which isn't there")
+}

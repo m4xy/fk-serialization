@@ -1,0 +1,9 @@
+// fk-serialization is two projects: the library, here, which serializers and formats are written
+// with, and JSON; and processor, which writes a serializer for each type marked @Serializable.
+// Build scripts use fk-tests' plugin, to run the tests; kiln publishLocal here publishes both.
+// example, a project that uses them, isn't one, as it's never published: kiln -C example build
+// builds and tests it.
+settings = Settings(
+  uses = [library("uk.m4xy:fk-tests-kiln:0.1.0")],
+  projects = [path("processor")],
+)

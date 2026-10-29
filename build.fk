@@ -1,0 +1,9 @@
+// fk-serialization: what serializers are written with, and what formats handle: the Serializer
+// spec, the Encoder and Decoder effects, and the annotations a project marks its types with; and
+// JSON, in uk.m4xy.serialization.json.
+import uk.m4xy.kiln.fckt.Fckt
+import uk.m4xy.fktests.kiln.*
+
+project = Project(name = "fk-serialization", group = "uk.m4xy", version = "0.1.0")
+
+plugins = [Fckt(), FkTests()]

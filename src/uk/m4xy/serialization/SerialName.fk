@@ -1,0 +1,3 @@
+// The name a field or case is written by, in place of its own, as "full_name" for name; or a
+// type's, which a format may write.
+annotation type SerialName(name: String)

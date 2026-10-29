@@ -1,0 +1,6 @@
+// A Boolean, as the format writes one.
+module BooleanSerializer : Serializer {
+  type T = Boolean
+  @Encoder serialize(value: Boolean): Unit = encodeBoolean(value)
+  @Decoder deserialize(): Boolean = decodeBoolean()
+}

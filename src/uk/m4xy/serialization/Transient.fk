@@ -1,0 +1,2 @@
+// Marks a field that isn't written, and is its default when read, so it must have one.
+annotation type Transient

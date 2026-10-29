@@ -1,0 +1,6 @@
+// A Char, as the format writes one.
+module CharSerializer : Serializer {
+  type T = Char
+  @Encoder serialize(value: Char): Unit = encodeChar(value)
+  @Decoder deserialize(): Char = decodeChar()
+}

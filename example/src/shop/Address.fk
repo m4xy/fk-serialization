@@ -1,0 +1,3 @@
+import uk.m4xy.serialization.*
+
+@Serializable type Address(line: String, inner: Option<Address> = None)

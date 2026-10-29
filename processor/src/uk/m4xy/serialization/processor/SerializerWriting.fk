@@ -1,0 +1,196 @@
+import fckt.effects.Fail
+import fckt.symbols.*
+import fckt.symbols.Declarations.*
+import fckt.symbols.processing.GeneratedFile
+
+// Writing a type's serializer: NameSerializer, in the type's package, a module that follows
+// Serializer, written as fckt's code. A record is written as its fields, each by its serial name,
+// but those marked @Transient; and read by name, those with a default, if they're there, given to
+// copy, so a field left out is its default. A type whose cases carry nothing is an enumeration,
+// written as its case's name; another type with cases, as its case, with its fields, each of which
+// is read. A field's type is one fk-serialization has a serializer for, Int, Float, String, Boolean
+// or Char; a List, an Option, or a Map from String, of one; or a type marked @Serializable, whose
+// serializer is the one written beside it.
+module SerializerWriting {
+  serializable: String = "uk.m4xy.serialization.Serializable"
+  serialName: String = "uk.m4xy.serialization.SerialName"
+  transient: String = "uk.m4xy.serialization.Transient"
+
+  private primitives: List<String> = ["Int", "Float", "String", "Boolean", "Char"]
+  private mapType: String = "fckt.collections.Maps.Map"
+
+  // Where a type's serializer is: the type's package, the type as that package names it, Rounding.Level
+  // for one in a module, and the serializer's module, RoundingLevelSerializer.
+  private type Place(packageName: String, local: String, serializer: String)
+
+  // The serializer of d, a type of a project whose types marked @Serializable are serializable, by
+  // their full names; and of whose other types, others.
+  @Fail file(d: TypeDeclaration, serializable: List<String>, others: List<String>): GeneratedFile = {
+    if (d.parameters.isNotEmpty()) fail("${d.simpleName} has type parameters, and a serializer is written only for a type without")
+    if (d.opaque) fail("${d.simpleName} is opaque, so only its module can build one or look into it")
+    at = placeOf(d.name)
+    context = Context(d, at, serializable, others)
+    (serialize, deserialize) = when (d.body) {
+      Fields(fields, privateConstructor) -> {
+        if (privateConstructor) fail("only ${d.simpleName}'s module can build one, as its constructor is private")
+        record(context, fields)
+      }
+      Cases(cases) -> if (d.isEnumeration) enumeration(context, cases) else withCases(context, cases)
+    }
+    imports = ["fckt.effects.Fail", "uk.m4xy.serialization.*", "uk.m4xy.serialization.Encoding.*", "uk.m4xy.serialization.Decoding.*"] +
+      fieldTypes(d).flatMap { usedTypes(it) }.distinct().map { placeOf(it) }.filter { it.packageName != at.packageName }.map { "${it.packageName}.${it.serializer}" }.distinct()
+    text = (["// Written by fk-serialization's processor, from ${d.name}, which it's written from again each build.", ""] +
+      imports.map { "import $it" } +
+      ["", "${if (d.visibility == Internal) "internal " else ""}module ${at.serializer} : Serializer {", "  type T = ${at.local}", ""] +
+      ["  @Encoder serialize(value: ${at.local}): Unit = {"] + indented(serialize, 4) + ["  }", ""] +
+      ["  @Decoder deserialize(): ${at.local} = {"] + indented(deserialize, 4) + ["  }", "}"]).joinToString("\n") + "\n"
+    GeneratedFile((if (at.packageName.isEmpty()) "" else "${at.packageName.replace(".", "/")}/") + "${at.serializer}.fk", text)
+  }
+
+  // What writing a type's serializer needs to know.
+  private type Context(declaration: TypeDeclaration, at: Place, serializable: List<String>, others: List<String>)
+
+  private placeOf(name: String): Place = {
+    parts = name.split(".")
+    packageParts = parts.takeWhile { it.take(1).lowercase() == it.take(1) }
+    owners = parts.drop(packageParts.size)
+    Place(packageParts.joinToString("."), owners.joinToString("."), owners.joinToString("") + "Serializer")
+  }
+
+  private indented(lines: List<String>, by: Int): List<String> = lines.map { if (it.isEmpty()) it else " ".repeat(by) + it }
+
+  // ---- Records ----
+
+  @Fail private record(context: Context, fields: List<Field>): (List<String>, List<String>) = {
+    name = typeSerialName(context.declaration)
+    fields.filter { isTransient(it) && !it.hasDefault }.forEach {
+      fail("${context.declaration.simpleName}'s ${it.name} is @Transient, so it needs a default, which it's read as")
+    }
+    kept = fields.filter { !isTransient(it) }
+    required = kept.filter { !it.hasDefault }
+    defaulted = kept.filter { it.hasDefault }
+    serialize = ["beginRecord(${quoted(name)})"] +
+      kept.flatMap { f -> ["encodeField(${quoted(fieldSerialName(f))})", encoding(context, f, f.fieldType, "value.${f.name}", 0)] } +
+      ["endRecord()"]
+    deserialize = ["enterRecord(${quoted(name)})"] +
+      required.map { f -> "read${capitalised(f.name)} = required(${quoted(name)}, ${quoted(fieldSerialName(f))}) { ${decoding(context, f, f.fieldType, 0)} }" } +
+      ["made0 = ${context.at.local}(${required.map { "${it.name} = read${capitalised(it.name)}" }.joinToString(", ")})"] +
+      defaulted.mapIndexed { i, f ->
+        "made${i + 1} = if (decodeField(${quoted(fieldSerialName(f))})) made$i.copy(${f.name} = ${decoding(context, f, f.fieldType, 0)}) else made$i"
+      } +
+      ["leaveRecord()", "made${defaulted.size}"]
+    (serialize, deserialize)
+  }
+
+  // ---- Types with cases ----
+
+  @Fail private enumeration(context: Context, cases: List<Case>): (List<String>, List<String>) = {
+    name = typeSerialName(context.declaration)
+    serialize = ["encodeEnum(${quoted(name)}, when (value) {"] + cases.map { "  ${it.name} -> ${quoted(caseSerialName(it))}" } + ["})"]
+    deserialize = ["which = decodeEnum(${quoted(name)})", "when (which) {"] +
+      cases.map { "  ${quoted(caseSerialName(it))} -> ${it.name}" } +
+      ["  else -> fail(\"\$which isn't a case of ${escaped(name)}\")", "}"]
+    (serialize, deserialize)
+  }
+
+  @Fail private withCases(context: Context, cases: List<Case>): (List<String>, List<String>) = {
+    name = typeSerialName(context.declaration)
+    cases.forEach { c ->
+      c.fields.filter { isTransient(it) }.forEach { fail("${context.declaration.simpleName}.${c.name}'s ${it.name} is @Transient, which only a record's field can be") }
+    }
+    serialize = ["when (value) {"] + cases.flatMap { c ->
+      pattern = if (c.fields.isEmpty()) c.name else "${c.name}(${c.fields.map { "field${capitalised(it.name)}" }.joinToString(", ")})"
+      ["  $pattern -> {", "    beginCase(${quoted(name)}, ${quoted(caseSerialName(c))})"] +
+        c.fields.flatMap { f -> ["    encodeField(${quoted(fieldSerialName(f))})", "    ${encoding(context, f, f.fieldType, "field${capitalised(f.name)}", 0)}"] } +
+        ["    endCase()", "  }"]
+    } + ["}"]
+    deserialize = ["which = enterCase(${quoted(name)})", "made = when (which) {"] +
+      cases.map { c ->
+        caseName = "$name.${caseSerialName(c)}"
+        if (c.fields.isEmpty()) "  ${quoted(caseSerialName(c))} -> ${c.name}"
+        else "  ${quoted(caseSerialName(c))} -> ${c.name}(${c.fields.map { f -> "${f.name} = required(${quoted(caseName)}, ${quoted(fieldSerialName(f))}) { ${decoding(context, f, f.fieldType, 0)} }" }.joinToString(", ")})"
+      } +
+      ["  else -> fail(\"\$which isn't a case of ${escaped(name)}\")", "}", "leaveCase()", "made"]
+    (serialize, deserialize)
+  }
+
+  // ---- Fields' types ----
+
+  // The code that writes value, of type t, a field's or what's in it.
+  @Fail private encoding(context: Context, field: Field, t: TypeRef, value: String, depth: Int): String = when (t) {
+    Named(name, arguments) -> when (arguments) {
+      [] -> "${serializerOf(context, field, t, name)}.serialize($value)"
+      [item] ->
+        if (name == "List") "encodeList($value) { item$depth -> ${encoding(context, field, item, "item$depth", depth + 1)} }"
+        else if (name == "Option") "encodeOption($value) { some$depth -> ${encoding(context, field, item, "some$depth", depth + 1)} }"
+        else fail(unsupported(context, field, t))
+      [key, item] ->
+        if (name == mapType && key == Named("String")) "encodeMap($value) { entry$depth -> ${encoding(context, field, item, "entry$depth", depth + 1)} }"
+        else fail(unsupported(context, field, t))
+      else -> fail(unsupported(context, field, t))
+    }
+    else -> fail(unsupported(context, field, t))
+  }
+
+  // The code that reads a value of type t.
+  @Fail private decoding(context: Context, field: Field, t: TypeRef, depth: Int): String = when (t) {
+    Named(name, arguments) -> when (arguments) {
+      [] -> "${serializerOf(context, field, t, name)}.deserialize()"
+      [item] ->
+        if (name == "List") "decodeList { ${decoding(context, field, item, depth + 1)} }"
+        else if (name == "Option") "decodeOption { ${decoding(context, field, item, depth + 1)} }"
+        else fail(unsupported(context, field, t))
+      [key, item] ->
+        if (name == mapType && key == Named("String")) "decodeMap { ${decoding(context, field, item, depth + 1)} }"
+        else fail(unsupported(context, field, t))
+      else -> fail(unsupported(context, field, t))
+    }
+    else -> fail(unsupported(context, field, t))
+  }
+
+  // The serializer of the type named, with no type arguments: fk-serialization's, for a constant;
+  // or the one written beside a type marked @Serializable, the project's or another's.
+  @Fail private serializerOf(context: Context, field: Field, t: TypeRef, name: String): String =
+    if (primitives.contains(name)) "${name}Serializer"
+    else if (context.others.contains(name)) fail("${context.declaration.simpleName}'s ${field.name} is a ${SymbolsText.typeText(t)}, which isn't marked @Serializable")
+    else if (!name.contains(".")) fail(unsupported(context, field, t))
+    else placeOf(name).serializer
+
+  private unsupported(context: Context, field: Field, t: TypeRef): String =
+    "${context.declaration.simpleName}'s ${field.name} is a ${SymbolsText.typeText(t)}, which has no serializer: a field is an Int, Float, String, Boolean or Char, a List, Option or Map from String of one, or a type marked @Serializable"
+
+  // The types with serializers of their own that t names: those but the language's.
+  private usedTypes(t: TypeRef): List<String> = when (t) {
+    Named(name, arguments) -> (if (name.contains(".") && name != mapType) [name] else []) + arguments.flatMap { usedTypes(it) }
+    else -> []
+  }
+
+  private fieldTypes(d: TypeDeclaration): List<TypeRef> = when (d.body) {
+    Fields(fields, _) -> fields.filter { !isTransient(it) }.map { it.fieldType }
+    Cases(cases) -> cases.flatMap { c -> c.fields.map { it.fieldType } }
+  }
+
+  // ---- Names ----
+
+  private typeSerialName(d: TypeDeclaration): String = serialNameIn(d.annotations).getOrElse(d.name)
+  private fieldSerialName(f: Field): String = serialNameIn(f.annotations).getOrElse(f.name)
+  private caseSerialName(c: Case): String = serialNameIn(c.annotations).getOrElse(c.name)
+
+  private serialNameIn(annotations: List<Annotation>): Option<String> =
+    annotations.named(serialName).flatMap { it.argument("name") }.flatMap { v ->
+      when (v) {
+        Text(name) -> Some(name)
+        else -> None
+      }
+    }
+
+  private isTransient(f: Field): Boolean = f.annotations.named(transient).isSome()
+
+  private capitalised(name: String): String = name.take(1).uppercase() + name.drop(1)
+
+  // Text as a string in fckt's code.
+  private quoted(text: String): String = "\"${escaped(text)}\""
+
+  private escaped(text: String): String =
+    text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")
+}

@@ -1,0 +1,26 @@
+import fckt.collections.Maps.*
+
+// Writing what holds other values: each item, or value, written as each says.
+module Encoding {
+  @Encoder encodeList<A>(items: List<A>, each: @Encoder (A) -> Unit): Unit = {
+    beginList(items.size)
+    items.forEach { each(it) }
+    endList()
+  }
+
+  @Encoder encodeOption<A>(value: Option<A>, some: @Encoder (A) -> Unit): Unit = when (value) {
+    Some(it) -> some(it)
+    None -> encodeNone()
+  }
+
+  // A map from text, in its keys' order.
+  @Encoder encodeMap<V>(map: Map<String, V>, each: @Encoder (V) -> Unit): Unit = {
+    entries = map.toList()
+    beginMap(entries.size)
+    entries.forEach { key, value ->
+      encodeKey(key)
+      each(value)
+    }
+    endMap()
+  }
+}

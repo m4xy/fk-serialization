@@ -1,0 +1,45 @@
+import uk.m4xy.fktests.api.Test
+import fckt.symbols.*
+import fckt.symbols.processing.*
+import uk.m4xy.serialization.processor.*
+
+at: Location = Location(1, 1, "src/shop/T.fk")
+marked: List<Annotation> = [Annotation("uk.m4xy.serialization.Serializable")]
+
+// The problems in symbols, as the processor says them.
+problemsIn(types: List<TypeDeclaration>): List<String> = when (SerializerProcessor.process(Symbols(types))) {
+  Ok(_) -> []
+  Error(problems) -> problems.map { Processing.problemText(it) }
+}
+
+record(name: String, fields: List<Field>, privateConstructor: Boolean = false): TypeDeclaration =
+  TypeDeclaration(name, at, Fields(fields, privateConstructor), annotations = marked)
+
+@Test writesOneFileForEachMarkedType() = when (SerializerProcessor.process(Symbols([
+  record("shop.User", [Field("name", Named("String"))]),
+  TypeDeclaration("shop.Plain", at, Fields([])),
+  TypeDeclaration("shop.Catalog.Level", at, Cases([Case("Low", at)]), annotations = marked),
+]))) {
+  Ok(files) -> assertEquals(["shop/UserSerializer.fk", "shop/CatalogLevelSerializer.fk"], files.map { it.path })
+  Error(problems) -> assertEquals([], problems)
+}
+
+@Test saysWhyItCantWriteOne() = assertEquals(
+  [
+    "src/shop/T.fk:1:1: error: Box has type parameters, and a serializer is written only for a type without",
+    "src/shop/T.fk:1:1: error: Hidden's x is a (Int) -> Int, which has no serializer: a field is an Int, Float, String, Boolean or Char, a List, Option or Map from String of one, or a type marked @Serializable",
+    "src/shop/T.fk:1:1: error: Holder's plain is a shop.Plain, which isn't marked @Serializable",
+    "src/shop/T.fk:1:1: error: Visit's count is @Transient, so it needs a default, which it's read as",
+    "src/shop/T.fk:1:1: error: only Ratio's module can build one, as its constructor is private",
+    "src/shop/T.fk:1:1: error: Keyed's byNumber is a fckt.collections.Maps.Map<Int, String>, which has no serializer: a field is an Int, Float, String, Boolean or Char, a List, Option or Map from String of one, or a type marked @Serializable",
+  ],
+  problemsIn([
+    TypeDeclaration("shop.Box", at, Fields([Field("value", Parameter("T"))]), parameters = ["T"], annotations = marked),
+    record("shop.Hidden", [Field("x", FunctionType([Named("Int")], Named("Int")))]),
+    TypeDeclaration("shop.Plain", at, Fields([])),
+    record("shop.Holder", [Field("plain", Named("shop.Plain"))]),
+    record("shop.Visit", [Field("count", Named("Int"), annotations = [Annotation("uk.m4xy.serialization.Transient")])]),
+    record("shop.Ratio", [Field("n", Named("Int"))], privateConstructor = true),
+    record("shop.Keyed", [Field("byNumber", Named("fckt.collections.Maps.Map", [Named("Int"), Named("String")]))]),
+  ]),
+)

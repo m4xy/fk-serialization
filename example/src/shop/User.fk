@@ -1,0 +1,12 @@
+import uk.m4xy.serialization.*
+import fckt.collections.Maps.*
+
+@Serializable type User(
+  @SerialName("full_name") name: String,
+  age: Int = 0,
+  addresses: List<Address>,
+  nickname: Option<String> = None,
+  levels: Map<String, Level>,
+  @Transient visits: Int = 0,
+  favourite: Option<Shape>,
+)

@@ -1,0 +1,10 @@
+// A value in JSON. A number is kept as it's written, so a whole one keeps every digit; an
+// object's fields are in the order they're written.
+type JsonValue {
+  JsonNull,
+  JsonBoolean(value: Boolean),
+  JsonNumber(text: String),
+  JsonString(value: String),
+  JsonArray(items: List<JsonValue>),
+  JsonObject(fields: List<JsonField>),
+}
