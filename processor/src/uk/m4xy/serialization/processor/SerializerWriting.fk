@@ -38,25 +38,48 @@ module SerializerWriting {
       Cases(cases) -> if (d.isEnumeration) enumeration(context, cases) else withCases(context, cases)
     }
     describe = shape(context)
-    imports = ["fckt.effects.Fail", "uk.m4xy.serialization.*", "uk.m4xy.serialization.Shape as SerialShape", "uk.m4xy.serialization.Encoding.*", "uk.m4xy.serialization.Decoding.*"] +
+    imports = [
+      "fckt.effects.Fail",
+      "uk.m4xy.serialization.*",
+      "uk.m4xy.serialization.Shape as SerialShape",
+      "uk.m4xy.serialization.Encoding.*",
+      "uk.m4xy.serialization.Decoding.*",
+    ] +
       fieldTypes(d).flatMap { usedTypes(it) }.distinct().map { placeOf(it) }.filter { it.packageName != at.packageName }.map { "${it.packageName}.${it.serializer}" }.distinct()
     text = (["// Written by fk-serialization's processor, from ${d.name}, which it's written from again each build.", ""] +
       imports.map { "import $it" } +
-      ["", "${if (d.visibility == Internal) "internal " else ""}module ${at.serializer} : Serializer {", "  type T = ${at.local}", ""] +
+      [
+        "",
+        "${if (d.visibility == Internal) "internal " else ""}module ${at.serializer} : Serializer {",
+        "  type T = ${at.local}",
+        "",
+      ] +
       ["  @Encoder serialize(value: ${at.local}): Unit = {"] + indented(serialize, 4) + ["  }", ""] +
       ["  @Decoder deserialize(): ${at.local} = {"] + indented(deserialize, 4) + ["  }", ""] +
       ["  describe(): SerialShape ="] + indented(describe, 4) + ["}"]).joinToString("\n") + "\n"
-    GeneratedFile((if (at.packageName.isEmpty()) "" else "${at.packageName.replace(".", "/")}/") + "${at.serializer}.fk", text)
+    GeneratedFile(
+      (if (at.packageName.isEmpty()) "" else "${at.packageName.replace(".", "/")}/") + "${at.serializer}.fk",
+      text,
+    )
   }
 
   // What writing a type's serializer needs to know.
-  private type Context(declaration: TypeDeclaration, at: Place, serializable: List<String>, others: List<String>)
+  private type Context(
+    declaration: TypeDeclaration,
+    at: Place,
+    serializable: List<String>,
+    others: List<String>,
+  )
 
   private placeOf(name: String): Place = {
     parts = name.split(".")
     packageParts = parts.takeWhile { it.take(1).lowercase() == it.take(1) }
     owners = parts.drop(packageParts.size)
-    Place(packageParts.joinToString("."), owners.joinToString("."), owners.joinToString("") + "Serializer")
+    Place(
+      packageParts.joinToString("."),
+      owners.joinToString("."),
+      owners.joinToString("") + "Serializer",
+    )
   }
 
   private indented(lines: List<String>, by: Int): List<String> = lines.map { if (it.isEmpty()) it else " ".repeat(by) + it }
@@ -66,7 +89,9 @@ module SerializerWriting {
   @Fail private record(context: Context, fields: List<Field>): (List<String>, List<String>) = {
     name = typeSerialName(context.declaration)
     fields.filter { isTransient(it) && !it.hasDefault }.forEach {
-      fail("${context.declaration.simpleName}'s ${it.name} is @Transient, so it needs a default, which it's read as")
+      fail(
+        "${context.declaration.simpleName}'s ${it.name} is @Transient, so it needs a default, which it's read as",
+      )
     }
     kept = fields.filter { !isTransient(it) }
     required = kept.filter { !it.hasDefault }
@@ -76,7 +101,9 @@ module SerializerWriting {
       ["endRecord()"]
     deserialize = ["enterRecord(${quoted(name)})"] +
       required.map { f -> "read${capitalised(f.name)} = required(${quoted(name)}, ${quoted(fieldSerialName(f))}) { ${decoding(context, f, f.fieldType, 0)} }" } +
-      ["made0 = ${context.at.local}(${required.map { "${it.name} = read${capitalised(it.name)}" }.joinToString(", ")})"] +
+      [
+        "made0 = ${context.at.local}(${required.map { "${it.name} = read${capitalised(it.name)}" }.joinToString(", ")})",
+      ] +
       defaulted.mapIndexed { i, f ->
         "made${i + 1} = if (decodeField(${quoted(fieldSerialName(f))})) made$i.copy(${f.name} = ${decoding(context, f, f.fieldType, 0)}) else made$i"
       } +

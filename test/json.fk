@@ -30,9 +30,18 @@ drawing: Drawing = Drawing(
 
 @Test saysWhatIsntThere() = {
   assertEquals(Error("Point needs x, which isn't there"), Json.decode(PointSerializer, "{\"y\":4}"))
-  assertEquals(Error("expected a whole number, not \"3\""), Json.decode(PointSerializer, "{\"x\":\"3\"}"))
-  assertEquals(Error("expected a whole number, not 3.5"), Json.decode(PointSerializer, "{\"x\":3.5}"))
-  assertEquals(Error("Square isn't a case of Shape"), Json.decode(ShapeSerializer, "{\"type\":\"Square\"}"))
+  assertEquals(
+    Error("expected a whole number, not \"3\""),
+    Json.decode(PointSerializer, "{\"x\":\"3\"}"),
+  )
+  assertEquals(
+    Error("expected a whole number, not 3.5"),
+    Json.decode(PointSerializer, "{\"x\":3.5}"),
+  )
+  assertEquals(
+    Error("Square isn't a case of Shape"),
+    Json.decode(ShapeSerializer, "{\"type\":\"Square\"}"),
+  )
   assertEquals(Error("Middle isn't a case of Level"), Json.decode(LevelSerializer, "\"Middle\""))
   assertEquals(Error("expected Point, an object, not an array"), Json.decode(PointSerializer, "[]"))
 }
@@ -40,11 +49,16 @@ drawing: Drawing = Drawing(
 // JSON text is read as RFC 8259 has it, and written back without its space.
 @Test readsJsonText() = {
   assertEquals(
-    Ok(JsonObject([JsonField("a", JsonArray([JsonNumber("1"), JsonNumber("-0.5e+3"), JsonBoolean(true), JsonNull])), JsonField("b", JsonString("x\ny/😀"))])),
+    Ok(
+      JsonObject([JsonField("a", JsonArray([JsonNumber("1"), JsonNumber("-0.5e+3"), JsonBoolean(true), JsonNull])), JsonField("b", JsonString("x\ny/😀"))],
+    )),
     JsonText.read("{\"a\": [1, -0.5e+3, true, null], \"b\": \"x\\ny\\/\\ud83d\\ude00\"}"),
   )
   assertEquals(Ok(JsonString("é\u0001")), JsonText.read("\"\\u00e9\\u0001\""))
-  assertReadsBack(JsonText, JsonObject([JsonField("q\"\\", JsonArray([JsonString("\u0001\t"), JsonObject([])]))]))
+  assertReadsBack(
+    JsonText,
+    JsonObject([JsonField("q\"\\", JsonArray([JsonString("\u0001\t"), JsonObject([])]))]),
+  )
   assertEquals("\"\\u0001\"", JsonText.of(JsonString("\u0001")))
 }
 
@@ -59,6 +73,12 @@ drawing: Drawing = Drawing(
 
 // A Float is a JSON number, 1.0 for OCaml's 1.; and what isn't finite, which JSON has no number for, null.
 @Test writesFloatsAsJsonHasThem() = {
-  assertEquals("{\"type\":\"Circle\",\"centre\":{\"x\":0,\"y\":0},\"radius\":1.0}", Json.encode(ShapeSerializer, Circle(Point(0), 1.0)))
-  assertEquals("{\"type\":\"Circle\",\"centre\":{\"x\":0,\"y\":0},\"radius\":null}", Json.encode(ShapeSerializer, Circle(Point(0), 1.0 / 0.0)))
+  assertEquals(
+    "{\"type\":\"Circle\",\"centre\":{\"x\":0,\"y\":0},\"radius\":1.0}",
+    Json.encode(ShapeSerializer, Circle(Point(0), 1.0)),
+  )
+  assertEquals(
+    "{\"type\":\"Circle\",\"centre\":{\"x\":0,\"y\":0},\"radius\":null}",
+    Json.encode(ShapeSerializer, Circle(Point(0), 1.0 / 0.0)),
+  )
 }

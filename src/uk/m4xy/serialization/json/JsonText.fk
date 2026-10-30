@@ -155,7 +155,9 @@ module JsonText : Format {
       if (high >= 55296 && high < 56320 && s.drop(at + 5).startsWith("\\u")) {
         low = hexAt(s, at + 7)
         if (low >= 56320 && low < 57344) ("${(65536 + (high - 55296) * 1024 + (low - 56320)).toChar()}", at + 11)
-        else fail("at ${at + 7}: \\u${s.substring(at + 7, at + 11)} doesn't follow a high surrogate")
+        else fail(
+          "at ${at + 7}: \\u${s.substring(at + 7, at + 11)} doesn't follow a high surrogate",
+        )
       }
       else if (high >= 55296 && high < 57344) fail("at ${at + 1}: \\u${s.substring(at + 1, at + 5)} is half of a surrogate pair")
       else ("${high.toChar()}", at + 5)

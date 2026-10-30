@@ -49,7 +49,10 @@ module ShapeSerializer : Serializer {
   @Decoder deserialize(): Shape = {
     case = enterCase("Shape")
     made = when (case) {
-      "Circle" -> Circle(required("Shape.Circle", "centre") { PointSerializer.deserialize() }, required("Shape.Circle", "radius") { FloatSerializer.deserialize() })
+      "Circle" -> Circle(
+        required("Shape.Circle", "centre") { PointSerializer.deserialize() },
+        required("Shape.Circle", "radius") { FloatSerializer.deserialize() },
+      )
       "Dot" -> Dot
       else -> fail("$case isn't a case of Shape")
     }

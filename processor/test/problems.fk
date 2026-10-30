@@ -34,12 +34,24 @@ record(name: String, fields: List<Field>, privateConstructor: Boolean = false): 
     "src/shop/T.fk:1:1: error: Keyed's byNumber is a fckt.collections.Maps.Map<Int, String>, which has no serializer: a field is an Int, Float, String, Boolean or Char, a List, Option or Map from String of one, or a type marked @Serializable",
   ],
   problemsIn([
-    TypeDeclaration("shop.Box", at, Fields([Field("value", Parameter("T"))]), parameters = ["T"], annotations = marked),
+    TypeDeclaration(
+      "shop.Box",
+      at,
+      Fields([Field("value", Parameter("T"))]),
+      parameters = ["T"],
+      annotations = marked,
+    ),
     record("shop.Hidden", [Field("x", FunctionType([Named("Int")], Named("Int")))]),
     TypeDeclaration("shop.Plain", at, Fields([])),
     record("shop.Holder", [Field("plain", Named("shop.Plain"))]),
-    record("shop.Visit", [Field("count", Named("Int"), annotations = [Annotation("uk.m4xy.serialization.Transient")])]),
+    record(
+      "shop.Visit",
+      [Field("count", Named("Int"), annotations = [Annotation("uk.m4xy.serialization.Transient")])],
+    ),
     record("shop.Ratio", [Field("n", Named("Int"))], privateConstructor = true),
-    record("shop.Keyed", [Field("byNumber", Named("fckt.collections.Maps.Map", [Named("Int"), Named("String")]))]),
+    record(
+      "shop.Keyed",
+      [Field("byNumber", Named("fckt.collections.Maps.Map", [Named("Int"), Named("String")]))],
+    ),
   ]),
 )

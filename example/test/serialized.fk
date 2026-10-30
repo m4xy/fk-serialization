@@ -24,13 +24,25 @@ user: User = User(
 
 @Test leavesOutWhatHasADefault() = assertEquals(
   Ok(User("Bo", addresses = [], levels = mapOf([]), favourite = Some(Dot))),
-  Json.decode(UserSerializer, "{\"favourite\":{\"type\":\"Dot\"},\"levels\":{},\"addresses\":[],\"full_name\":\"Bo\"}"),
+  Json.decode(
+    UserSerializer,
+    "{\"favourite\":{\"type\":\"Dot\"},\"levels\":{},\"addresses\":[],\"full_name\":\"Bo\"}",
+  ),
 )
 
 @Test saysWhatsMissing() = {
-  assertEquals(Error("shop.User needs full_name, which isn't there"), Json.decode(UserSerializer, "{\"addresses\":[],\"levels\":{},\"favourite\":null}"))
-  assertEquals(Error("shape.box needs label, which isn't there"), Json.decode(ShapeSerializer, "{\"type\":\"box\",\"side\":1}"))
-  assertEquals(Error("Square isn't a case of shape"), Json.decode(ShapeSerializer, "{\"type\":\"Square\"}"))
+  assertEquals(
+    Error("shop.User needs full_name, which isn't there"),
+    Json.decode(UserSerializer, "{\"addresses\":[],\"levels\":{},\"favourite\":null}"),
+  )
+  assertEquals(
+    Error("shape.box needs label, which isn't there"),
+    Json.decode(ShapeSerializer, "{\"type\":\"box\",\"side\":1}"),
+  )
+  assertEquals(
+    Error("Square isn't a case of shape"),
+    Json.decode(ShapeSerializer, "{\"type\":\"Square\"}"),
+  )
   assertEquals(Error("High isn't a case of shop.Level"), Json.decode(LevelSerializer, "\"High\""))
 }
 
