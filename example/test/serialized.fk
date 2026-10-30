@@ -1,5 +1,7 @@
 import uk.m4xy.fktests.api.Test
 import uk.m4xy.serialization.json.*
+import uk.m4xy.serialization.*
+import uk.m4xy.serialization.Shape as SerialShape
 import fckt.collections.Maps.*
 import shop.*
 
@@ -34,3 +36,31 @@ user: User = User(
 
 // A type in a module has a serializer named for both.
 @Test writesTypesInModules() = assertEquals("{\"name\":\"pen\",\"price\":3}", Json.encode(CatalogItemSerializer, Catalog.Item("pen", 3)))
+
+@Test describesItsShape() = assertEquals(
+  "shop.User{full_name: text, age?: integer, addresses: [shop.Address], nickname?: text?, levels: {shop.Level}, favourite: shop.Shape?}",
+  shown(UserSerializer.describe()),
+)
+
+@Test describesWhatItRefersTo() = assertEquals(
+  "shop.Shape{Circle(radius: number) | box(side: number, label: char) | Dot()} shop.Level(Low | high) shop.Address{line: text, inner?: shop.Address?}",
+  "${shown(ShapeSerializer.describe())} ${shown(LevelSerializer.describe())} ${shown(AddressSerializer.describe())}",
+)
+
+shown(shape: SerialShape): String = when (shape) {
+  TextShape -> "text"
+  IntegerShape -> "integer"
+  NumberShape -> "number"
+  BooleanShape -> "boolean"
+  CharShape -> "char"
+  ListShape(item) -> "[${shown(item)}]"
+  OptionShape(value) -> "${shown(value)}?"
+  MapShape(value) -> "{${shown(value)}}"
+  RecordShape(name, fields) -> "$name{${fields.map { field(it) }.joinToString(", ")}}"
+  EnumerationShape(name, values) -> "$name(${values.joinToString(" | ")})"
+  CasesShape(name, cases) -> "$name{${cases.map { c -> "${c.name}(${c.fields.map { field(it) }.joinToString(", ")})" }.joinToString(" | ")}}"
+  ReferenceShape(name, _) -> name
+  UnknownShape -> "?"
+}
+
+field(f: ShapeField): String = "${f.name}${if (f.required) "" else "?"}: ${shown(f.shape)}"

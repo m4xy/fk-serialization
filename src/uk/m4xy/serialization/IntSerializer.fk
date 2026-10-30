@@ -3,4 +3,5 @@ module IntSerializer : Serializer {
   type T = Int
   @Encoder serialize(value: Int): Unit = encodeInt(value)
   @Decoder deserialize(): Int = decodeInt()
+  describe(): Shape = IntegerShape
 }

@@ -3,4 +3,5 @@ module BooleanSerializer : Serializer {
   type T = Boolean
   @Encoder serialize(value: Boolean): Unit = encodeBoolean(value)
   @Decoder deserialize(): Boolean = decodeBoolean()
+  describe(): Shape = BooleanShape
 }

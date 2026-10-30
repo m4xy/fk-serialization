@@ -3,4 +3,5 @@ module StringSerializer : Serializer {
   type T = String
   @Encoder serialize(value: String): Unit = encodeString(value)
   @Decoder deserialize(): String = decodeString()
+  describe(): Shape = TextShape
 }

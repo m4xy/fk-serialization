@@ -1,0 +1,15 @@
+type Shape {
+  TextShape,
+  IntegerShape,
+  NumberShape,
+  BooleanShape,
+  CharShape,
+  ListShape(item: Shape),
+  OptionShape(value: Shape),
+  MapShape(value: Shape),
+  RecordShape(name: String, fields: List<ShapeField>),
+  EnumerationShape(name: String, values: List<String>),
+  CasesShape(name: String, cases: List<ShapeCase>),
+  ReferenceShape(name: String, shape: () -> Shape),
+  UnknownShape,
+}

@@ -55,6 +55,15 @@ another's whose serializer was written with it. What can't be written, as a fiel
 type, a type with type parameters, or one only its module can build, the processor says, where it
 is, and the build fails.
 
+## Shapes
+
+Every serializer describes the shape of what it writes: `UserSerializer.describe()` is a `Shape`, a
+record with each field's name, shape, and whether it can be left out. A list, an option or a map is
+the shape of what's in it, and another `@Serializable` type is a `ReferenceShape`, by its full name,
+whose shape is worked out when it's asked for, so a type can hold itself. A serializer written by
+hand describes nothing unless it says, `UnknownShape`. Shapes are what fk-http's OpenAPI documents are
+made from.
+
 ## How it works
 
 ```

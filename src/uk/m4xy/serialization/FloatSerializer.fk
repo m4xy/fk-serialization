@@ -3,4 +3,5 @@ module FloatSerializer : Serializer {
   type T = Float
   @Encoder serialize(value: Float): Unit = encodeFloat(value)
   @Decoder deserialize(): Float = decodeFloat()
+  describe(): Shape = NumberShape
 }

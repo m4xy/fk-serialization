@@ -1,0 +1,1 @@
+type ShapeCase(name: String, fields: List<ShapeField>)

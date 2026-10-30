@@ -3,4 +3,5 @@ module CharSerializer : Serializer {
   type T = Char
   @Encoder serialize(value: Char): Unit = encodeChar(value)
   @Decoder deserialize(): Char = decodeChar()
+  describe(): Shape = CharShape
 }

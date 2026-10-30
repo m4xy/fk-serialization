@@ -6,4 +6,5 @@ spec Serializer {
   type T
   @Encoder serialize(value: T): Unit
   @Decoder deserialize(): T
+  describe(): Shape = UnknownShape
 }

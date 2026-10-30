@@ -37,13 +37,15 @@ module SerializerWriting {
       }
       Cases(cases) -> if (d.isEnumeration) enumeration(context, cases) else withCases(context, cases)
     }
-    imports = ["fckt.effects.Fail", "uk.m4xy.serialization.*", "uk.m4xy.serialization.Encoding.*", "uk.m4xy.serialization.Decoding.*"] +
+    describe = shape(context)
+    imports = ["fckt.effects.Fail", "uk.m4xy.serialization.*", "uk.m4xy.serialization.Shape as SerialShape", "uk.m4xy.serialization.Encoding.*", "uk.m4xy.serialization.Decoding.*"] +
       fieldTypes(d).flatMap { usedTypes(it) }.distinct().map { placeOf(it) }.filter { it.packageName != at.packageName }.map { "${it.packageName}.${it.serializer}" }.distinct()
     text = (["// Written by fk-serialization's processor, from ${d.name}, which it's written from again each build.", ""] +
       imports.map { "import $it" } +
       ["", "${if (d.visibility == Internal) "internal " else ""}module ${at.serializer} : Serializer {", "  type T = ${at.local}", ""] +
       ["  @Encoder serialize(value: ${at.local}): Unit = {"] + indented(serialize, 4) + ["  }", ""] +
-      ["  @Decoder deserialize(): ${at.local} = {"] + indented(deserialize, 4) + ["  }", "}"]).joinToString("\n") + "\n"
+      ["  @Decoder deserialize(): ${at.local} = {"] + indented(deserialize, 4) + ["  }", ""] +
+      ["  describe(): SerialShape ="] + indented(describe, 4) + ["}"]).joinToString("\n") + "\n"
     GeneratedFile((if (at.packageName.isEmpty()) "" else "${at.packageName.replace(".", "/")}/") + "${at.serializer}.fk", text)
   }
 
@@ -112,6 +114,40 @@ module SerializerWriting {
       } +
       ["  else -> fail(\"\$which isn't a case of ${escaped(name)}\")", "}", "leaveCase()", "made"]
     (serialize, deserialize)
+  }
+
+  // ---- Shapes ----
+
+  @Fail private shape(context: Context): List<String> = {
+    d = context.declaration
+    when (d.body) {
+      Fields(fields, _) -> ["RecordShape(${quoted(d.name)}, ["] +
+        fields.filter { !isTransient(it) }.map { f -> "  ${shapeField(context, f)}," } + ["])"]
+      Cases(cases) ->
+        if (d.isEnumeration) ["EnumerationShape(${quoted(d.name)}, [${cases.map { quoted(caseSerialName(it)) }.joinToString(", ")}])"]
+        else ["CasesShape(${quoted(d.name)}, ["] +
+          cases.map { c -> "  ShapeCase(${quoted(caseSerialName(c))}, [${c.fields.map { shapeField(context, it) }.joinToString(", ")}])," } + ["])"]
+    }
+  }
+
+  @Fail private shapeField(context: Context, f: Field): String =
+    "ShapeField(${quoted(fieldSerialName(f))}, ${shapeOf(context, f, f.fieldType)}, ${!f.hasDefault})"
+
+  @Fail private shapeOf(context: Context, field: Field, t: TypeRef): String = when (t) {
+    Named(name, arguments) -> when (arguments) {
+      [] ->
+        if (primitives.contains(name)) "${name}Serializer.describe()"
+        else "ReferenceShape(${quoted(name)}) { ${serializerOf(context, field, t, name)}.describe() }"
+      [item] ->
+        if (name == "List") "ListShape(${shapeOf(context, field, item)})"
+        else if (name == "Option") "OptionShape(${shapeOf(context, field, item)})"
+        else fail(unsupported(context, field, t))
+      [key, item] ->
+        if (name == mapType && key == Named("String")) "MapShape(${shapeOf(context, field, item)})"
+        else fail(unsupported(context, field, t))
+      else -> fail(unsupported(context, field, t))
+    }
+    else -> fail(unsupported(context, field, t))
   }
 
   // ---- Fields' types ----
