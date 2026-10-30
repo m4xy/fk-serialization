@@ -20,7 +20,10 @@ user: User = User(
 )
 
 // What's read back is what was written, but what's @Transient, which is its default.
-@Test readsBackWhatItWrites() = assertEquals(Ok(user.copy(visits = 0)), Json.decode(UserSerializer, Json.encode(UserSerializer, user)))
+@Test readsBackWhatItWrites() = assertEquals(
+  Ok(user.copy(visits = 0)),
+  Json.decode(UserSerializer, Json.encode(UserSerializer, user)),
+)
 
 @Test leavesOutWhatHasADefault() = assertEquals(
   Ok(User("Bo", addresses = [], levels = mapOf([]), favourite = Some(Dot))),
@@ -47,7 +50,10 @@ user: User = User(
 }
 
 // A type in a module has a serializer named for both.
-@Test writesTypesInModules() = assertEquals("{\"name\":\"pen\",\"price\":3}", Json.encode(CatalogItemSerializer, Catalog.Item("pen", 3)))
+@Test writesTypesInModules() = assertEquals(
+  "{\"name\":\"pen\",\"price\":3}",
+  Json.encode(CatalogItemSerializer, Catalog.Item("pen", 3)),
+)
 
 @Test describesItsShape() = assertEquals(
   "shop.User{full_name: text, age?: integer, addresses: [shop.Address], nickname?: text?, levels: {shop.Level}, favourite: shop.Shape?}",

@@ -1,3 +1,5 @@
 import uk.m4xy.serialization.*
 
-@Serializable @SerialName("shape") type Shape { Circle(radius: Float), @SerialName("box") Square(side: Float, label: Char), Dot }
+@Serializable @SerialName(
+  "shape",
+) type Shape { Circle(radius: Float), @SerialName("box") Square(side: Float, label: Char), Dot }

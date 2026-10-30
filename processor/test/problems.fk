@@ -7,7 +7,9 @@ at: Location = Location(1, 1, "src/shop/T.fk")
 marked: List<Annotation> = [Annotation("uk.m4xy.serialization.Serializable")]
 
 // The problems in symbols, as the processor says them.
-problemsIn(types: List<TypeDeclaration>): List<String> = when (SerializerProcessor.process(Symbols(types))) {
+problemsIn(
+  types: List<TypeDeclaration>,
+): List<String> = when (SerializerProcessor.process(Symbols(types))) {
   Ok(_) -> []
   Error(problems) -> problems.map { Processing.problemText(it) }
 }
@@ -20,7 +22,10 @@ record(name: String, fields: List<Field>, privateConstructor: Boolean = false): 
   TypeDeclaration("shop.Plain", at, Fields([])),
   TypeDeclaration("shop.Catalog.Level", at, Cases([Case("Low", at)]), annotations = marked),
 ]))) {
-  Ok(files) -> assertEquals(["shop/UserSerializer.fk", "shop/CatalogLevelSerializer.fk"], files.map { it.path })
+  Ok(files) -> assertEquals(
+    ["shop/UserSerializer.fk", "shop/CatalogLevelSerializer.fk"],
+    files.map { it.path },
+  )
   Error(problems) -> assertEquals([], problems)
 }
 

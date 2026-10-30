@@ -25,17 +25,30 @@ module SerializerWriting {
 
   // The serializer of d, a type of a project whose types marked @Serializable are serializable, by
   // their full names; and of whose other types, others.
-  @Fail file(d: TypeDeclaration, serializable: List<String>, others: List<String>): GeneratedFile = {
-    if (d.parameters.isNotEmpty()) fail("${d.simpleName} has type parameters, and a serializer is written only for a type without")
-    if (d.opaque) fail("${d.simpleName} is opaque, so only its module can build one or look into it")
+  @Fail file(
+    d: TypeDeclaration,
+    serializable: List<String>,
+    others: List<String>,
+  ): GeneratedFile = {
+    if (d.parameters.isNotEmpty()) fail(
+      "${d.simpleName} has type parameters, and a serializer is written only for a type without",
+    )
+    if (d.opaque) fail(
+      "${d.simpleName} is opaque, so only its module can build one or look into it",
+    )
     at = placeOf(d.name)
     context = Context(d, at, serializable, others)
     (serialize, deserialize) = when (d.body) {
       Fields(fields, privateConstructor) -> {
-        if (privateConstructor) fail("only ${d.simpleName}'s module can build one, as its constructor is private")
+        if (privateConstructor) fail(
+          "only ${d.simpleName}'s module can build one, as its constructor is private",
+        )
         record(context, fields)
       }
-      Cases(cases) -> if (d.isEnumeration) enumeration(context, cases) else withCases(context, cases)
+      Cases(cases) -> if (d.isEnumeration) enumeration(context, cases) else withCases(
+        context,
+        cases,
+      )
     }
     describe = shape(context)
     imports = [
@@ -45,7 +58,9 @@ module SerializerWriting {
       "uk.m4xy.serialization.Encoding.*",
       "uk.m4xy.serialization.Decoding.*",
     ] +
-      fieldTypes(d).flatMap { usedTypes(it) }.distinct().map { placeOf(it) }.filter { it.packageName != at.packageName }.map { "${it.packageName}.${it.serializer}" }.distinct()
+      fieldTypes(
+        d,
+      ).flatMap { usedTypes(it) }.distinct().map { placeOf(it) }.filter { it.packageName != at.packageName }.map { "${it.packageName}.${it.serializer}" }.distinct()
     text = (["// Written by fk-serialization's processor, from ${d.name}, which it's written from again each build.", ""] +
       imports.map { "import $it" } +
       [
@@ -54,7 +69,10 @@ module SerializerWriting {
         "  type T = ${at.local}",
         "",
       ] +
-      ["  @Encoder serialize(value: ${at.local}): Unit = {"] + indented(serialize, 4) + ["  }", ""] +
+      ["  @Encoder serialize(value: ${at.local}): Unit = {"] + indented(serialize, 4) + [
+        "  }",
+        "",
+      ] +
       ["  @Decoder deserialize(): ${at.local} = {"] + indented(deserialize, 4) + ["  }", ""] +
       ["  describe(): SerialShape ="] + indented(describe, 4) + ["}"]).joinToString("\n") + "\n"
     GeneratedFile(
@@ -82,7 +100,10 @@ module SerializerWriting {
     )
   }
 
-  private indented(lines: List<String>, by: Int): List<String> = lines.map { if (it.isEmpty()) it else " ".repeat(by) + it }
+  private indented(
+    lines: List<String>,
+    by: Int,
+  ): List<String> = lines.map { if (it.isEmpty()) it else " ".repeat(by) + it }
 
   // ---- Records ----
 
@@ -115,7 +136,9 @@ module SerializerWriting {
 
   @Fail private enumeration(context: Context, cases: List<Case>): (List<String>, List<String>) = {
     name = typeSerialName(context.declaration)
-    serialize = ["encodeEnum(${quoted(name)}, when (value) {"] + cases.map { "  ${it.name} -> ${quoted(caseSerialName(it))}" } + ["})"]
+    serialize = [
+      "encodeEnum(${quoted(name)}, when (value) {",
+    ] + cases.map { "  ${it.name} -> ${quoted(caseSerialName(it))}" } + ["})"]
     deserialize = ["which = decodeEnum(${quoted(name)})", "when (which) {"] +
       cases.map { "  ${quoted(caseSerialName(it))} -> ${it.name}" } +
       ["  else -> fail(\"\$which isn't a case of ${escaped(name)}\")", "}"]
@@ -151,7 +174,9 @@ module SerializerWriting {
       Fields(fields, _) -> ["RecordShape(${quoted(d.name)}, ["] +
         fields.filter { !isTransient(it) }.map { f -> "  ${shapeField(context, f)}," } + ["])"]
       Cases(cases) ->
-        if (d.isEnumeration) ["EnumerationShape(${quoted(d.name)}, [${cases.map { quoted(caseSerialName(it)) }.joinToString(", ")}])"]
+        if (d.isEnumeration) [
+          "EnumerationShape(${quoted(d.name)}, [${cases.map { quoted(caseSerialName(it)) }.joinToString(", ")}])",
+        ]
         else ["CasesShape(${quoted(d.name)}, ["] +
           cases.map { c -> "  ShapeCase(${quoted(caseSerialName(c))}, [${c.fields.map { shapeField(context, it) }.joinToString(", ")}])," } + ["])"]
     }
@@ -180,7 +205,13 @@ module SerializerWriting {
   // ---- Fields' types ----
 
   // The code that writes value, of type t, a field's or what's in it.
-  @Fail private encoding(context: Context, field: Field, t: TypeRef, value: String, depth: Int): String = when (t) {
+  @Fail private encoding(
+    context: Context,
+    field: Field,
+    t: TypeRef,
+    value: String,
+    depth: Int,
+  ): String = when (t) {
     Named(name, arguments) -> when (arguments) {
       [] -> "${serializerOf(context, field, t, name)}.serialize($value)"
       [item] ->
@@ -196,7 +227,12 @@ module SerializerWriting {
   }
 
   // The code that reads a value of type t.
-  @Fail private decoding(context: Context, field: Field, t: TypeRef, depth: Int): String = when (t) {
+  @Fail private decoding(
+    context: Context,
+    field: Field,
+    t: TypeRef,
+    depth: Int,
+  ): String = when (t) {
     Named(name, arguments) -> when (arguments) {
       [] -> "${serializerOf(context, field, t, name)}.deserialize()"
       [item] ->
@@ -215,7 +251,9 @@ module SerializerWriting {
   // or the one written beside a type marked @Serializable, the project's or another's.
   @Fail private serializerOf(context: Context, field: Field, t: TypeRef, name: String): String =
     if (primitives.contains(name)) "${name}Serializer"
-    else if (context.others.contains(name)) fail("${context.declaration.simpleName}'s ${field.name} is a ${SymbolsText.typeText(t)}, which isn't marked @Serializable")
+    else if (context.others.contains(name)) fail(
+      "${context.declaration.simpleName}'s ${field.name} is a ${SymbolsText.typeText(t)}, which isn't marked @Serializable",
+    )
     else if (!name.contains(".")) fail(unsupported(context, field, t))
     else placeOf(name).serializer
 
@@ -255,5 +293,14 @@ module SerializerWriting {
   private quoted(text: String): String = "\"${escaped(text)}\""
 
   private escaped(text: String): String =
-    text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")
+    text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace(
+      "\n",
+      "\\n",
+    ).replace(
+      "\t",
+      "\\t",
+    ).replace(
+      "\r",
+      "\\r",
+    )
 }

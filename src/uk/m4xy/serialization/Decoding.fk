@@ -13,7 +13,9 @@ module Decoding {
   @Decoder private itemsOf<A>(each: @Decoder () -> A, kept: List<A>): List<A> =
     if (hasItem()) itemsOf(each, kept + [each()]) else kept
 
-  @Decoder decodeOption<A>(some: @Decoder () -> A): Option<A> = if (decodeNone()) None else Some(some())
+  @Decoder decodeOption<A>(
+    some: @Decoder () -> A,
+  ): Option<A> = if (decodeNone()) None else Some(some())
 
   @Decoder decodeMap<V>(each: @Decoder () -> V): Map<String, V> = {
     enterMap()
@@ -22,7 +24,10 @@ module Decoding {
     entries.toMap()
   }
 
-  @Decoder private entriesOf<V>(each: @Decoder () -> V, kept: List<(String, V)>): List<(String, V)> = when (decodeKey()) {
+  @Decoder private entriesOf<V>(
+    each: @Decoder () -> V,
+    kept: List<(String, V)>,
+  ): List<(String, V)> = when (decodeKey()) {
     Some(key) -> entriesOf(each, kept + [(key, each())])
     None -> kept
   }

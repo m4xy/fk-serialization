@@ -8,10 +8,16 @@ import uk.m4xy.serialization.*
 // of it; and a Float that isn't finite, which JSON has no number for, null.
 module Json {
   // The value, as JSON text.
-  encode(serializer: Serializer, value: serializer.T): String = JsonText.of(toJson(serializer, value))
+  encode(
+    serializer: Serializer,
+    value: serializer.T,
+  ): String = JsonText.of(toJson(serializer, value))
 
   // The value JSON text is, or why it isn't one.
-  decode(serializer: Serializer, text: String): Result<serializer.T, String> = when (JsonText.read(text)) {
+  decode(
+    serializer: Serializer,
+    text: String,
+  ): Result<serializer.T, String> = when (JsonText.read(text)) {
     Ok(json) -> fromJson(serializer, json)
     Error(reason) -> Error(reason)
   }

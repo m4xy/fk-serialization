@@ -15,7 +15,10 @@ drawing: Drawing = Drawing(
   Json.encode(DrawingSerializer, drawing),
 )
 
-@Test readsBackWhatItWrites() = assertEquals(Ok(drawing), Json.decode(DrawingSerializer, Json.encode(DrawingSerializer, drawing)))
+@Test readsBackWhatItWrites() = assertEquals(
+  Ok(drawing),
+  Json.decode(DrawingSerializer, Json.encode(DrawingSerializer, drawing)),
+)
 
 // Fields are read by name, in any order, whatever space is around them; one with a default can be
 // left out, and None is null.
