@@ -1,0 +1,5 @@
+# What kiln fetched from git, at the commit it fetched: kiln update fetches the newest.
+fckt:symbols:0.1.0 https://github.com/m4xy/fckt main ca3097ae1ddff79deb7208669b9374ca615575d4
+uk.m4xy:fk-tests-kiln:0.1.0 https://github.com/m4xy/fk-tests main 7a145dcc26e4f7909e31ca78ea751fd265715345
+uk.m4xy:fk-tests-runner:0.1.0 https://github.com/m4xy/fk-tests main 7a145dcc26e4f7909e31ca78ea751fd265715345
+uk.m4xy:fk-tests:0.1.0 https://github.com/m4xy/fk-tests main 7a145dcc26e4f7909e31ca78ea751fd265715345
