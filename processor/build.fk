@@ -7,7 +7,12 @@ project = Project(
   name = "fk-serialization-processor",
   group = "uk.m4xy",
   version = "0.1.0",
-  dependencies = [library("fckt:symbols:0.1.0")],
+  dependencies = [library(
+    "fckt:symbols:0.1.0",
+    git = "https://github.com/m4xy/fckt",
+    ref = "main",
+    folder = "symbols",
+  )],
 )
 
 plugins = [Fckt(), FkTests()]

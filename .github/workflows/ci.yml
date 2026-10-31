@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  # Nightly, so a change to fckt, kiln or a library it uses is tested here without a push here.
+  schedule:
+    - cron: "17 4 * * *"
+
+# Built with fckt and kiln as they are on main, checked out beside it, as bootstrap.sh expects.
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: fk-serialization
+      - uses: actions/checkout@v5
+        with:
+          repository: m4xy/fckt
+          path: fckt
+      - uses: actions/checkout@v5
+        with:
+          repository: m4xy/kiln
+          path: kiln
+      - uses: actions/checkout@v5
+        with:
+          repository: m4xy/fk-tests
+          path: fk-tests
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5
+      - run: opam install -y ocamlfind
+      - name: Build fckt
+        working-directory: fckt
+        run: opam exec -- ./bootstrap.sh && echo "$PWD/build/boot/bin" >> "$GITHUB_PATH"
+      - name: Bootstrap kiln
+        working-directory: kiln
+        run: opam exec -- ./bootstrap.sh && echo "$HOME/.kiln/bin" >> "$GITHUB_PATH"
+      - name: Build and test
+        working-directory: fk-serialization
+        run: opam exec -- kiln build
